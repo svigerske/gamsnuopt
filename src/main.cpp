@@ -13,6 +13,10 @@ int solveMIQCP(
    gevHandle_t gev
 );
 
+int solveMINLP(
+   gmoHandle_t gmo,
+   gevHandle_t gev
+);
 
 int main(int argc, char** argv)
 {
@@ -29,6 +33,8 @@ int main(int argc, char** argv)
    {
       if( gmoModelType(gmo) <= gmoProc_rmip || gmoModelType(gmo) >= gmoProc_qcp )
          solveMIQCP(gmo, gev);
+      else
+         solveMINLP(gmo, gev);
    }
    catch( const NuoptException& e )
    {

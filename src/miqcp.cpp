@@ -231,6 +231,8 @@ int solveMIQCP(
    printf("result: %p\n", (void*)res);
    printf("error: %s\n", res->errorMessage());
 
+   delete res;
+
 TERMINATE:
 
    return 0;

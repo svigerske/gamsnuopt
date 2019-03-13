@@ -1,6 +1,6 @@
 all : gamsnuopt
 
-gamsnuopt : src/main.o src/miqcp.o src/loadgms.o gmomcc.o gevmcc.o optcc.o
+gamsnuopt : src/main.o src/miqcp.o src/minlp.o src/loadgms.o gmomcc.o gevmcc.o optcc.o
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 clean:
@@ -9,7 +9,7 @@ clean:
 %.c : gams/apifiles/C/api/%.c
 	cp $< $@
 
-IFLAGS = -Igams/apifiles/C/api -Inuopt/userapp/include
+IFLAGS = -Igams/apifiles/C/api -Inuopt/userapp/include -Inuopt/dp
 #WFLAGS = -Wall -Wextra -Wno-unused-parameter
 CFLAGS = $(IFLAGS) $(WFLAGS) -g -std=c99 -DGAMSDIR=\"gams\"
 CXXFLAGS = $(IFLAGS) $(WFLAGS) -g -std=c++11
