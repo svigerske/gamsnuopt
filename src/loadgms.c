@@ -9,7 +9,7 @@
 #include "loadgms.h"
 
 // set to 3 to see gams log
-#define GAMSLOGOPTION 3
+#define GAMSLOGOPTION 0
 
 RETURN loadGMS(
    struct gmoRec** gmo,
