@@ -18,7 +18,7 @@ extern "C"
 #include "nuopt_exception.h"
 
 static
-int solve(
+int solveMIQCP(
    gmoHandle_t gmo,
    gevHandle_t gev
 )
@@ -43,14 +43,14 @@ int solve(
    int* jcolA;
    double* a;
    int nQelem;
-   int* irowQ;
-   int* jcolQ;
-   double* q;
+   int* irowQ = NULL;
+   int* jcolQ = NULL;
+   double* q = NULL;
    int nQCelem;
-   int* ifunQC;
-   int* irowQC;
-   int* jcolQC;
-   double* qc;
+   int* ifunQC = NULL;
+   int* irowQC = NULL;
+   int* jcolQC = NULL;
+   double* qc = NULL;
    int qcpos;
    int* ivtype;
    nuoptResult* res;
@@ -60,7 +60,8 @@ int solve(
    assert(gmo != NULL);
    assert(gev != NULL);
 
-   gmoUseQSet(gmo, 1);
+   if( gmoModelType(gmo) >= gmoProc_qcp )
+      gmoUseQSet(gmo, 1);
 
    n = gmoN(gmo);
    m = gmoM(gmo);
@@ -141,49 +142,56 @@ int solve(
    free(rowstart);
 
    nQelem = gmoObjQNZ(gmo);
-   irowQ = (int*) malloc(nQelem * sizeof(int));
-   jcolQ = (int*) malloc(nQelem * sizeof(int));
-   q = (double*) malloc(nQelem * sizeof(double));
-   gmoGetObjQ(gmo, jcolQ, irowQ, q);
-   /* ??? NuOpt multiplies by 1/2; GAMS diagonal elements are already multiplied by 2 */
-   for( i = 0; i < nQelem; ++i )
+   if( nQelem > 0 )
    {
-      if( irowQ[i] != jcolQ[i] )
-         q[i] *= 2.0;
-      // gmoGetObjQ does not seem to have taken indexbase=1 into account!
-      irowQ[i]++;
-      jcolQ[i]++;
+      irowQ = (int*) malloc(nQelem * sizeof(int));
+      jcolQ = (int*) malloc(nQelem * sizeof(int));
+      q = (double*) malloc(nQelem * sizeof(double));
+      gmoGetObjQ(gmo, jcolQ, irowQ, q);
+      /* ??? NuOpt multiplies by 1/2; GAMS diagonal elements are already multiplied by 2 */
+      for( i = 0; i < nQelem; ++i )
+      {
+         if( irowQ[i] != jcolQ[i] )
+            q[i] *= 2.0;
+         // gmoGetObjQ does not seem to have taken indexbase=1 into account!
+         irowQ[i]++;
+         jcolQ[i]++;
+      }
    }
 
    nQCelem = 0;
-   for( i = 0; i < m; ++i )
-      nQCelem += gmoGetRowQNZOne(gmo, i+1);
-   ifunQC = (int*) malloc(nQCelem * sizeof(int));
-   irowQC = (int*) malloc(nQCelem * sizeof(int));
-   jcolQC = (int*) malloc(nQCelem * sizeof(int));
-   qc = (double*) malloc(nQCelem * sizeof(double));
-   qcpos = 0;
-   for( i = 0; i < m; ++i )
+   if( gmoModelType(gmo) >= gmoProc_qcp )
+      for( i = 0; i < m; ++i )
+         nQCelem += gmoGetRowQNZOne(gmo, i+1);
+   if( nQCelem > 0 )
    {
-      int qnz;
-      int j;
-
-      qnz = gmoGetRowQNZOne(gmo, i+1);
-      if( qnz == 0 )
-         continue;
-
-      gmoGetRowQ(gmo, i+1, jcolQC + qcpos, irowQC + qcpos, qc + qcpos);
-      for( j = 0; j < qnz; ++j )
+      ifunQC = (int*) malloc(nQCelem * sizeof(int));
+      irowQC = (int*) malloc(nQCelem * sizeof(int));
+      jcolQC = (int*) malloc(nQCelem * sizeof(int));
+      qc = (double*) malloc(nQCelem * sizeof(double));
+      qcpos = 0;
+      for( i = 0; i < m; ++i )
       {
-         ifunQC[qcpos + j] = i;
-         if( jcolQC[qcpos + j] != irowQC[qcpos + j] )
-            qc[qcpos + j] *= 2.0;
-//         // gmoGetRowQ does not seem to have taken indexbase=1 into account!
-//         jcolQC[qcpos+j]++;
-//         irowQC[qcpos+j]++;
-      }
+         int qnz;
+         int j;
 
-      qcpos += qnz;
+         qnz = gmoGetRowQNZOne(gmo, i+1);
+         if( qnz == 0 )
+            continue;
+
+         gmoGetRowQ(gmo, i+1, jcolQC + qcpos, irowQC + qcpos, qc + qcpos);
+         for( j = 0; j < qnz; ++j )
+         {
+            ifunQC[qcpos + j] = i;
+            if( jcolQC[qcpos + j] != irowQC[qcpos + j] )
+               qc[qcpos + j] *= 2.0;
+//            // gmoGetRowQ does not seem to have taken indexbase=1 into account!
+//            jcolQC[qcpos+j]++;
+//            irowQC[qcpos+j]++;
+         }
+
+         qcpos += qnz;
+      }
    }
 
    ivtype = NULL;
@@ -217,6 +225,8 @@ int solve(
       }
    }
 
+   //options.outputMode = "debug";
+
    res = solveQP(&options, n, m, minimize, x0,
       bL, bU, ibL, ibU,
       cL, cU, icL, icU,
@@ -246,11 +256,12 @@ int main(int argc, char** argv)
 
    try
    {
-      solve(gmo, gev);
+      if( gmoModelType(gmo) <= gmoProc_rmip || gmoModelType(gmo) >= gmoProc_qcp )
+         solveMIQCP(gmo, gev);
    }
    catch( const NuoptException& e )
    {
-
+      gevLogStat(gev, e.what());
    }
 
    freeGMS(&gmo, &gev);
