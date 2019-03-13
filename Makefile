@@ -1,6 +1,6 @@
 all : gamsnuopt
 
-gamsnuopt : src/miqcp.o src/loadgms.o gmomcc.o gevmcc.o optcc.o
+gamsnuopt : src/main.o src/miqcp.o src/loadgms.o gmomcc.o gevmcc.o optcc.o
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 clean:

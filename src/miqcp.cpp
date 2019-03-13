@@ -8,16 +8,9 @@
 #include "gevmcc.h"
 #include "optcc.h"
 
-extern "C"
-{
-#include "loadgms.h"
-}
-
 /* NuOpt API */
 #include "nuoIf.h"
-#include "nuopt_exception.h"
 
-static
 int solveMIQCP(
    gmoHandle_t gmo,
    gevHandle_t gev
@@ -241,28 +234,4 @@ int solveMIQCP(
 TERMINATE:
 
    return 0;
-}
-
-int main(int argc, char** argv)
-{
-   gmoHandle_t gmo;
-   gevHandle_t gev;
-
-//   nuoptDispVersion();
-
-   loadGMS(&gmo, &gev, argv[1]);
-
-   gmoIndexBaseSet(gmo, 1);
-
-   try
-   {
-      if( gmoModelType(gmo) <= gmoProc_rmip || gmoModelType(gmo) >= gmoProc_qcp )
-         solveMIQCP(gmo, gev);
-   }
-   catch( const NuoptException& e )
-   {
-      gevLogStat(gev, e.what());
-   }
-
-   freeGMS(&gmo, &gev);
 }
