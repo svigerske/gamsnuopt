@@ -69,7 +69,7 @@ int solveMINLP(
    if ( !retVal )
      return 1;
 
-   if( true /* nonlinear */ )
+   if( gmoNLNZ(gmo) > 0 || gmoObjNLNZ(gmo) > 0 )  /* nonlinear */
    {
       // TOOD if option "quadra" set, then do adjMethod(0) (line-search) instead
       adjMethod(1); // trust-region
@@ -278,24 +278,27 @@ void deffunbc_(
          }
       }
 
-      if ( gamsDebug >= 2 )
-         printf("DEBUG: cl = %15.8e cu = %15.8e kfun = %d\n", cl[i], cu[i], kfun[i]);
-
       if( gmoGetEquOrderOne(cur_gmo, i+1) != gmoorder_L )
          khess[i] = 3;  /* nonlinear */
       else
          khess[i] = 0;
+
+      if ( gamsDebug >= 2 )
+         printf("DEBUG: cl = %15.8e cu = %15.8e kfun = %d khess = %d\n", cl[i], cu[i], kfun[i], khess[i]);
 
       gmoGetEquNameOne(cur_gmo, i+1, equname);
       memcpy(funam + 8*i, equname, std::min((size_t)8, strlen(equname)));
    }
 
    /* objective function */
+   cl[*nfnc-1] = cu[*nfnc-1] = 0.0;
    kfun[*nfnc-1] = -1;
    if( gmoGetObjOrder(cur_gmo) != gmoorder_L )
       khess[*nfnc-1] = 3;
    else
       khess[*nfnc-1] = 0;
+
+   printf("DEBUG: cl = %15.8e cu = %15.8e kfun = %d khess = %d\n", cl[*nfnc-1], cu[*nfnc-1], kfun[*nfnc-1], khess[*nfnc-1]);
 
    gmoGetObjName(cur_gmo, equname);
    memcpy(funam + 8*(*nfnc-1), equname, std::min((size_t)8, strlen(equname)));
@@ -336,6 +339,10 @@ void funlbc_(
    for( j = 0; j < nzobj; ++j )
       ifun[nzjac+j] = gmoM(cur_gmo)+1;
 
+   if( gamsDebug >= 2 )
+      for( i = 0; i < *ne; ++i )
+         printf("DEBUG ifun %d jvar %d a %g\n", ifun[i], jvar[i], a[i]);
+
    *ir = 0;
 }
 
@@ -368,6 +375,9 @@ void funnlbc_(
       }
       else
          f[i] = 0.0;
+
+      if( gamsDebug >= 2 )
+         printf("DEBUG: equorder %d f = %g\n", gmoGetEquOrderOne(cur_gmo, i+1), f[i]);
    }
 
    if( gmoGetObjOrder(cur_gmo) != gmoorder_L )
@@ -378,6 +388,9 @@ void funnlbc_(
    }
    else
       f[*nfnc-1] = 0.0;
+
+   if( gamsDebug >= 2 )
+      printf("DEBUG: objorder %d f = %g\n", gmoGetObjOrder(cur_gmo), f[*nfnc-1]);
 }
 
 void funqbc_(
@@ -474,6 +487,10 @@ void gradnlbc_(
       ifun[pos] = gmoM(cur_gmo)+1;
       jvar[pos] = objcolidx[i];
       a[pos] = grad[objcolidx[i]-1];
+
+      if( gamsDebug >= 2 )
+         printf("pos %d: ifun %d jvar %d a %g\n", pos, ifun[pos], jvar[pos], a[pos]);
+
       ++pos;
    }
    assert(pos == nzjac+nzobj);
@@ -549,6 +566,8 @@ void typevrbc_(
             ivtyp[i] = 1;
             break;
       }
+      if( gamsDebug >= 2 )
+         printf("DEBUG: ivtype = %d\n", ivtyp[i]);
    }
 }
 
