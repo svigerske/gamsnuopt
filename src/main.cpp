@@ -8,10 +8,12 @@ extern "C"
 #include "loadgms.h"
 }
 
+#if 0
 int solveMIQCP(
    gmoHandle_t gmo,
    gevHandle_t gev
 );
+#endif
 
 int solveMINLP(
    gmoHandle_t gmo,
@@ -31,10 +33,7 @@ int main(int argc, char** argv)
 
    try
    {
-      if( gmoModelType(gmo) <= gmoProc_rmip || gmoModelType(gmo) >= gmoProc_qcp )
-         solveMIQCP(gmo, gev);
-      else
-         solveMINLP(gmo, gev);
+      solveMINLP(gmo, gev);
    }
    catch( const NuoptException& e )
    {
