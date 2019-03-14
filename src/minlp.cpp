@@ -24,7 +24,7 @@ integer pscctf_(size_t len, const char* str);
 gmoHandle_t cur_gmo = NULL;
 gevHandle_t cur_gev = NULL;
 
-#define gamsDebug 10
+#define gamsDebug 0
 
 // 以下はビルド用ダミー
 //
@@ -150,7 +150,7 @@ void attrvrbc_(
    int*    iunt
    )
 {
-   if( gamsDebug >= 10 )
+   if( gamsDebug >= 1 )
       printf("CALL attrvrbc_(%d)\n", *i);
 
    intC_set(-1, idir);
@@ -173,7 +173,7 @@ void defvarbc_(
    char varname[GMS_SSSIZE];
    int i;
 
-   if( gamsDebug >= 10 )
+   if( gamsDebug >= 1 )
       printf("CALL defvarbc_\n");
 
    assert(cur_gmo != NULL);
@@ -182,7 +182,7 @@ void defvarbc_(
 
    if( *nvar > *nvmax )
    {
-      if ( gamsDebug >= 2 )
+      if ( gamsDebug >= 1 )
          fprintf(stderr, "defvarbc: Too many variables. nvar = %d\n", *nvar);
       *ir = 10;
       return;
@@ -199,7 +199,7 @@ void defvarbc_(
 
       kvar[i] = boundType(bl+i, bu+i);
 
-      if( gamsDebug >= 10 )
+      if( gamsDebug >= 2 )
          printf("DEBUG: bl = %15.8e bu = %15.8e kvar = %d\n", bl[i], bu[i], kvar[i]);
    }
 }
@@ -219,7 +219,7 @@ void deffunbc_(
    char equname[GMS_SSSIZE];
    int i;
 
-   if( gamsDebug >= 10 )
+   if( gamsDebug >= 1 )
       printf("CALL deffunbc_\n");
 
    //???
@@ -229,7 +229,7 @@ void deffunbc_(
    *nfnc = gmoM(cur_gmo) + 1;
    if( *nfnc > *nfmax )
    {
-      if( gamsDebug >= 2 )
+      if( gamsDebug >= 1 )
          fprintf(stderr, "deffunbc: Too many functions. nfnc = %d\n", *nfnc);
       *ir = 10;
       return;
@@ -271,7 +271,7 @@ void deffunbc_(
 
          default:
          {
-            if( gamsDebug >= 2 )
+            if( gamsDebug >= 1 )
                fprintf(stderr, "deffunbc: Unsupported equation type %d for equ %d\n", gmoGetEquTypeOne(cur_gmo, i), i);
             *ir = 10;
             break;
@@ -310,40 +310,216 @@ void funlbc_(
    int* ir
    )
 {
-   if( gamsDebug >= 10 )
+   int i, j;
+
+   if( gamsDebug >= 1 )
       printf("CALL funlbc_\n");
+
+   int nzjac = gmoNZ(cur_gmo);
+   int nzobj = gmoObjNZ(cur_gmo);
+   *ne = nzjac + nzobj;
+   if( *nemax < *ne )
+   {
+      *ir = 10;
+      return;
+   }
+
+   int* rowstart = (int*) malloc((gmoM(cur_gmo)+1) * sizeof(int));
+   gmoGetMatrixRow(cur_gmo, rowstart, jvar, a, NULL);
+   for( i = 0; i < gmoM(cur_gmo); ++i )
+      for( j = rowstart[i]; j < rowstart[i+1]; ++j )
+         ifun[j-1] = i+1;
+   assert(nzjac == rowstart[gmoM(cur_gmo)]-1);
+   free(rowstart);
+
+   gmoGetObjSparse(cur_gmo, jvar+nzjac, a+nzjac, NULL, &nzobj, &i);
+   for( j = 0; j < nzobj; ++j )
+      ifun[nzjac+j] = gmoM(cur_gmo)+1;
+
+   *ir = 0;
 }
 
-void funnlbc_(int* nvar,int* nfnc,double* x,double* f,int* ir)
+void funnlbc_(
+   int* nvar,
+   int* nfnc,
+   double* x,
+   double* f,
+   int* ir
+   )
 {
-   if( gamsDebug >= 10 )
+   int numerr = 0;
+   int i;
+
+   if( gamsDebug >= 1 )
       printf("CALL funnlbc_\n");
+
+   assert(*nvar == gmoN(cur_gmo));
+   assert(*nfnc == gmoM(cur_gmo)+1);
+
+   *ir = 0;
+
+   for( i = 0; i < *nfnc-1; ++i )
+   {
+      if( gmoGetEquOrderOne(cur_gmo, i+1) != gmoorder_L )
+      {
+         gmoEvalFunc(cur_gmo, i+1, x, f+i, &numerr);
+         if( numerr > 0 )
+            *ir = 10;
+      }
+      else
+         f[i] = 0.0;
+   }
+
+   if( gmoGetObjOrder(cur_gmo) != gmoorder_L )
+   {
+      gmoEvalFuncObj(cur_gmo, x, f+*nfnc-1, &numerr);
+      if( numerr > 0 )
+         *ir = 10;
+   }
+   else
+      f[*nfnc-1] = 0.0;
 }
 
-void funqbc_(int* nemax
-             ,int* ne,int* ifun,int* j1var,int* j2var,double* h,int* ir)
+void funqbc_(
+   int* nemax,
+   int* ne,
+   int* ifun,
+   int* j1var,
+   int* j2var,
+   double* h,
+   int* ir
+   )
 {
-   if( gamsDebug >= 10 )
+   if( gamsDebug >= 1 )
       printf("CALL funqbc_\n");
+
+   /* TODO */
+
+   *ne = 0;
 }
 
-void gradnlbc_(int* nvar,double* x,int* nemax,int* ne,int* ifun,int* jvar,double* a,int* ir)
+void gradnlbc_(
+   int*    nvar,
+   double* x,
+   int*    nemax,
+   int*    ne,
+   int*    ifun,
+   int*    jvar,
+   double* a,
+   int*    ir
+   )
 {
-   if( gamsDebug >= 10 )
+   int i;
+   int pos;
+   int numerr;
+   double f;
+   double gx;
+   double* grad;
+
+   if( gamsDebug >= 1 )
       printf("CALL gradnlbc_\n");
+
+   assert(*nvar == gmoN(cur_gmo));
+
+   int nzjac = gmoNZ(cur_gmo);
+   int nzobj = gmoObjNZ(cur_gmo);
+   *ne = nzjac + nzobj;
+   if( *nemax < *ne )
+   {
+      *ir = 10;
+      return;
+   }
+
+   // TODO it seems that we could skip over linear constraints/obj here
+
+   grad = (double*)malloc(*nvar * sizeof(double));
+
+   pos = 0;
+   for( i = 0; i < gmoM(cur_gmo); ++i )
+   {
+      gmoEvalGrad(cur_gmo, i+1, x, &f, grad, &gx, &numerr);
+      /* TODO numerr */
+
+      void* jacptr = NULL;
+      double jacval;
+      int colidx;
+      int nlflag;
+
+      do
+      {
+         gmoGetRowJacInfoOne(cur_gmo, i+1, &jacptr, &jacval, &colidx, &nlflag);
+
+         assert(pos < *ne);
+         ifun[pos] = i+1;
+         jvar[pos] = colidx;
+         a[pos] = grad[colidx-1];
+
+         if( gamsDebug >= 2 )
+            printf("pos %d: ifun %d jvar %d a %g\n", pos, ifun[pos], jvar[pos], a[pos]);
+
+         ++pos;
+      }
+      while( jacptr != NULL );
+   }
+   assert(pos == nzjac);
+
+   gmoEvalGradObj(cur_gmo, x, &f, grad, &gx, &numerr);
+   /* TODO numerr */
+
+   int* objcolidx = new int[nzobj];
+   gmoGetObjSparse(cur_gmo, objcolidx, a+pos, NULL, &nzobj, &i);
+   for( i = 0; i < nzobj; ++i )
+   {
+      assert(pos < *ne);
+      ifun[pos] = gmoM(cur_gmo)+1;
+      jvar[pos] = objcolidx[i];
+      a[pos] = grad[objcolidx[i]-1];
+      ++pos;
+   }
+   assert(pos == nzjac+nzobj);
+   delete[] objcolidx;
+
+   free(grad);
+
+   *ir = 0;
 }
 
-void hessnlbc_(int* nvar,int* nfnc,double* x,double* y,int* nemax,int* ne
-               ,int* j1var,int* j2var,double* h,int* ir)
+void hessnlbc_(
+   int*    nvar,
+   int*    nfnc,
+   double* x,
+   double* y,
+   int*    nemax,
+   int*    ne,
+   int*    j1var,
+   int*    j2var,
+   double* h,
+   int*    ir
+   )
 {
-   if( gamsDebug >= 10 )
+   if( gamsDebug >= 1 )
       printf("CALL hessnlbc_\n");
+
+   /* TODO nonlinear */
+   *ne = 0;
+
+   *ir = 0;
 }
 
-void initvrbc_(int* nvar,double* xini,int* ir)
+void initvrbc_(
+   int*    nvar,
+   double* xini,
+   int*    ir
+   )
 {
-   if( gamsDebug >= 10 )
+   if( gamsDebug >= 1 )
       printf("CALL initvrbc_\n");
+
+   assert(*nvar == gmoN(cur_gmo));
+
+   gmoGetVarL(cur_gmo, xini);
+
+   *ir = 0;
 }
 
 // probably only called through typevr_C
@@ -354,7 +530,7 @@ void typevrbc_(
 {
    int i;
 
-   if( gamsDebug >= 10 )
+   if( gamsDebug >= 1 )
       printf("CALL typevrbc_\n");
 
    assert(*nvar == gmoN(cur_gmo));
