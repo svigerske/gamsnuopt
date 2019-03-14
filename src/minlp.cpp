@@ -63,10 +63,17 @@ int solveMINLP(
    probType = gmoSense(gmo) == gmoObj_Max ? 1 : 0;
 
    nuoptParam p;
+   //p.read("nuopt.prm");
    p.iisDetect = "off";
+   p.outputMode = "debug";
+//   p.gaptol = 0.0;
+//   p.relgaptol = 0.0;
+//   p.outfilename = "solver";
+//   p.branchPresolveGcd = 0;
+   //p.check();
 
-   int retVal = setCommon(&p,&nvar,&nfnc,&probType);
-   if ( !retVal )
+   int retVal = setCommon(&p, &nvar, &nfnc, &probType);
+   if( !retVal )
      return 1;
 
    if( gmoNLNZ(gmo) > 0 || gmoObjNLNZ(gmo) > 0 )  /* nonlinear */
@@ -89,15 +96,20 @@ int solveMINLP(
 
    nuoptClose22();
 
-//   if ( amplflag ) {
-//     amplpt(r->errorMessage(),r->errorFlag()
-//       ,r->optResidual()
-//       ,r->optIteration()
-//       ,r->nPProbs(),r->nSxPivots(),r->nSxPivotsForMip()
-//       ,r->algorithm(),r->optValue(),r->getX(),r->getY());
-//   } else {
-//     nuoptOutput(r,outputRootName);
-//   }
+   nuoptOutput(r, "nuopt.out");
+
+   if( r->errorMessage()[0] == '\0' )
+      printf("Optimal\n");
+   else
+      printf("Non-Optimal: %s\n", r->errorMessage());
+
+   if( r->errorFlag() != 5 )
+   {
+      printf("Objective: %g\n", r->optValue());
+      int i;
+      for( i = 0; i < gmoN(gmo); ++i )
+         printf("X[%d] = %g\n", i, r->getX()[i]);
+   }
 
    delete r;
 
@@ -235,6 +247,8 @@ void deffunbc_(
       return;
    }
 
+   memset(funam, ' ', 8 * *nfnc);
+
    for( i = 0 ; i < *nfnc-1; ++i )
    {
       switch( gmoGetEquTypeOne(cur_gmo, i+1) )
@@ -283,7 +297,7 @@ void deffunbc_(
       else
          khess[i] = 0;
 
-      if ( gamsDebug >= 2 )
+      if( gamsDebug >= 2 )
          printf("DEBUG: cl = %15.8e cu = %15.8e kfun = %d khess = %d\n", cl[i], cu[i], kfun[i], khess[i]);
 
       gmoGetEquNameOne(cur_gmo, i+1, equname);
@@ -298,7 +312,8 @@ void deffunbc_(
    else
       khess[*nfnc-1] = 0;
 
-   printf("DEBUG: cl = %15.8e cu = %15.8e kfun = %d khess = %d\n", cl[*nfnc-1], cu[*nfnc-1], kfun[*nfnc-1], khess[*nfnc-1]);
+   if( gamsDebug >= 2 )
+      printf("DEBUG: cl = %15.8e cu = %15.8e kfun = %d khess = %d\n", cl[*nfnc-1], cu[*nfnc-1], kfun[*nfnc-1], khess[*nfnc-1]);
 
    gmoGetObjName(cur_gmo, equname);
    memcpy(funam + 8*(*nfnc-1), equname, std::min((size_t)8, strlen(equname)));
@@ -317,6 +332,8 @@ void funlbc_(
 
    if( gamsDebug >= 1 )
       printf("CALL funlbc_\n");
+
+   /* FIXME code below should do gradients only for linear equations only */
 
    int nzjac = gmoNZ(cur_gmo);
    int nzobj = gmoObjNZ(cur_gmo);
@@ -433,6 +450,12 @@ void gradnlbc_(
       printf("CALL gradnlbc_\n");
 
    assert(*nvar == gmoN(cur_gmo));
+
+   /* FIXME code below should do gradients only for nonlinear equations only */
+
+   *ne = 0;
+   *ir = 0;
+   return;
 
    int nzjac = gmoNZ(cur_gmo);
    int nzobj = gmoObjNZ(cur_gmo);
