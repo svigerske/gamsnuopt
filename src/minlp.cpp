@@ -18,28 +18,27 @@ extern char currentSolverDPM[1024];
 
 #include "nuopt_integer.h"
 using::nuopt::integer;
-integer pscctf_(size_t len, const char* str);
-extern "C" integer pscftc_(integer* len, char* fchar);
+
+#define gamsDebug 0
+#define nuoptDebug 0
 
 gmoHandle_t cur_gmo = NULL;
 gevHandle_t cur_gev = NULL;
-
-#define gamsDebug 0
 
 //int SimpleMessageOutput(int){return 0;}
 void  wcspinfo(int,int,double,double,double,double,int){}
 //int wcspDebug=0;
 void wcspinfo0(int,int,int){}
-
 int cpSetVar_para( const int* Vi, double* V ){return 0;}
 //extern double cpGetCurrentValue_para( int i, double* V, double* &arg_ValidFlag, int* &arg_ValidFlagNum ){ return 0.0;}
-
 int nuopqpUsed=0;
 int _nuopt_runningIn_VMS = 0; /* MPS 版ではダミー  */
 int _SimpleSystem_fpCheck = 0;
 int rangeAnalysisProbe = -1;
 //extern int wcspResultBestSeed;
 //int wcspResultBestSeed = 0;
+integer pscctf_(size_t len, const char* str);
+extern "C" integer pscftc_(integer* len, char* fchar);
 
 int solveMINLP(
    gmoHandle_t gmo,
@@ -53,8 +52,8 @@ int solveMINLP(
 
    DPMMAP_CREATE(currentDPM);
 
-   //nuoptDispVersion();
-   //nuoptOst(stdout,"             (AMPL module)\n");
+   nuoptDispVersion();
+   //nuoptOst(stdout,"             (GAMS module)\n");
 
    nfnc = gmoM(gmo) + 1;
    nvar = gmoN(gmo);
@@ -63,12 +62,9 @@ int solveMINLP(
    nuoptParam p;
    //p.read("nuopt.prm");
    p.iisDetect = "off";
+#if nuoptDebug > 1
    p.outputMode = "debug";
-//   p.gaptol = 0.0;
-//   p.relgaptol = 0.0;
-//   p.outfilename = "solver";
-//   p.branchPresolveGcd = 0;
-   //p.check();
+#endif
 
    int retVal = setCommon(&p, &nvar, &nfnc, &probType);
    if( !retVal )
@@ -76,7 +72,7 @@ int solveMINLP(
 
    if( gmoNLNZ(gmo) > 0 || gmoObjNLNZ(gmo) > 0 )  /* nonlinear */
    {
-      // TOOD if option "quadra" set, then do adjMethod(0) (line-search) instead
+      // TODO if option "quadra" set, then do adjMethod(0) (line-search) instead
       adjMethod(1); // trust-region
 
       int do2dir = 0;
@@ -93,18 +89,23 @@ int solveMINLP(
    else
       adjMethod(4);
 
+#if nuoptDebug > 0
    nuoptOpen22("gamsnuoptlog");
    pscctf_(strlen("gamsnuoptlog"),"gamsnuoptlog");
+#endif
 
    cur_gmo = gmo;
    cur_gev = gev;
 
    nuoptResult* r = nuoptKernel();
 
+#if nuoptDebug > 0
    nuoptClose22();
 
    nuoptOutput(r, "nuopt.out");
+#endif
 
+#if gamsDebug > 0
    if( r->errorMessage()[0] == '\0' )
       printf("Optimal\n");
    else
@@ -114,9 +115,12 @@ int solveMINLP(
    {
       printf("Objective: %g\n", r->optValue());
       int i;
+#if gamsDebug > 1
       for( i = 0; i < gmoN(gmo); ++i )
          printf("X[%d] = %g\n", i, r->getX()[i]);
+#endif
    }
+#endif
 
    delete r;
 
@@ -169,8 +173,9 @@ void attrvrbc_(
    int*    iunt
    )
 {
-   if( gamsDebug >= 1 )
-      printf("CALL attrvrbc_(%d)\n", *i);
+#if gamsDebug >= 1
+   printf("CALL attrvrbc_(%d)\n", *i);
+#endif
 
    intC_set(-1, idir);
    doubleC_set(-1.0, dpc);
@@ -192,8 +197,9 @@ void defvarbc_(
    char varname[GMS_SSSIZE];
    int i;
 
-   if( gamsDebug >= 1 )
-      printf("CALL defvarbc_\n");
+#if gamsDebug >= 1
+   printf("CALL defvarbc_\n");
+#endif
 
    assert(cur_gmo != NULL);
 
@@ -201,8 +207,6 @@ void defvarbc_(
 
    if( *nvar > *nvmax )
    {
-      if ( gamsDebug >= 1 )
-         fprintf(stderr, "defvarbc: Too many variables. nvar = %d\n", *nvar);
       *ir = 10;
       return;
    }
@@ -218,8 +222,9 @@ void defvarbc_(
 
       kvar[i] = boundType(bl+i, bu+i);
 
-      if( gamsDebug >= 2 )
-         printf("DEBUG: bl = %15.8e bu = %15.8e kvar = %d\n", bl[i], bu[i], kvar[i]);
+#if gamsDebug >= 2
+      printf("  bl = %15.8e bu = %15.8e kvar = %d\n", bl[i], bu[i], kvar[i]);
+#endif
    }
 }
 
@@ -238,8 +243,9 @@ void deffunbc_(
    char equname[GMS_SSSIZE];
    int i;
 
-   if( gamsDebug >= 1 )
-      printf("CALL deffunbc_\n");
+#if gamsDebug >= 1
+   printf("CALL deffunbc_\n");
+#endif
 
    integer len = 40;
    memset(pbnam, ' ', len);
@@ -251,8 +257,6 @@ void deffunbc_(
    *nfnc = gmoM(cur_gmo) + 1;
    if( *nfnc > *nfmax )
    {
-      if( gamsDebug >= 1 )
-         fprintf(stderr, "deffunbc: Too many functions. nfnc = %d\n", *nfnc);
       *ir = 10;
       return;
    }
@@ -295,9 +299,8 @@ void deffunbc_(
 
          default:
          {
-            if( gamsDebug >= 1 )
-               fprintf(stderr, "deffunbc: Unsupported equation type %d for equ %d\n", gmoGetEquTypeOne(cur_gmo, i), i);
-            *ir = 10;
+            fprintf(stderr, "deffunbc: Unsupported equation type %d for equ %d\n", gmoGetEquTypeOne(cur_gmo, i), i);
+            *ir = 1;
             break;
          }
       }
@@ -307,8 +310,9 @@ void deffunbc_(
       else
          khess[i] = 0;
 
-      if( gamsDebug >= 2 )
-         printf("DEBUG: cl = %15.8e cu = %15.8e kfun = %d khess = %d\n", cl[i], cu[i], kfun[i], khess[i]);
+#if gamsDebug >= 2
+      printf("  cl = %15.8e cu = %15.8e kfun = %d khess = %d\n", cl[i], cu[i], kfun[i], khess[i]);
+#endif
 
       gmoGetEquNameOne(cur_gmo, i+1, equname);
       memcpy(funam + 8*i, equname, std::min((size_t)8, strlen(equname)));
@@ -322,8 +326,9 @@ void deffunbc_(
    else
       khess[*nfnc-1] = 0;
 
-   if( gamsDebug >= 2 )
-      printf("DEBUG: cl = %15.8e cu = %15.8e kfun = %d khess = %d\n", cl[*nfnc-1], cu[*nfnc-1], kfun[*nfnc-1], khess[*nfnc-1]);
+#if gamsDebug >= 2
+   printf("  cl = %15.8e cu = %15.8e kfun = %d khess = %d\n", cl[*nfnc-1], cu[*nfnc-1], kfun[*nfnc-1], khess[*nfnc-1]);
+#endif
 
    gmoGetObjName(cur_gmo, equname);
    memcpy(funam + 8*(*nfnc-1), equname, std::min((size_t)8, strlen(equname)));
@@ -341,8 +346,9 @@ void funlbc_(
    int rownz;
    int i, j;
 
-   if( gamsDebug >= 1 )
-      printf("CALL funlbc_\n");
+#if gamsDebug >= 1
+   printf("CALL funlbc_\n");
+#endif
 
    /* we switch to *ir == 10 if *nemax is too small
     * if that happens, we continue to update *ne only
@@ -383,14 +389,15 @@ void funlbc_(
       *ne += gmoObjNZ(cur_gmo);
    }
 
-   if( gamsDebug >= 2 )
-   {
-      if( *ir == 0 )
-         for( i = 0; i < *ne; ++i )
-            printf("DEBUG ifun %d jvar %d a %g\n", ifun[i], jvar[i], a[i]);
-      else
-         printf("*nemax = %d too small, requesting %d\n", *nemax, *ne);
-   }
+#if gamsDebug >= 2
+   if( *ir == 0 )
+      for( i = 0; i < *ne; ++i )
+         printf("  ifun %d jvar %d a %g\n", ifun[i], jvar[i], a[i]);
+#endif
+#if gamsDebug >= 1
+   if( *ir == 10 )
+      printf("  *nemax = %d too small, requesting %d\n", *nemax, *ne);
+#endif
 }
 
 void funnlbc_(
@@ -404,8 +411,9 @@ void funnlbc_(
    int numerr = 0;
    int i;
 
-   if( gamsDebug >= 1 )
-      printf("CALL funnlbc_\n");
+#if gamsDebug >= 1
+   printf("CALL funnlbc_\n");
+#endif
 
    assert(*nvar == gmoN(cur_gmo));
    assert(*nfnc == gmoM(cur_gmo)+1);
@@ -423,8 +431,9 @@ void funnlbc_(
       else
          f[i] = 0.0;
 
-      if( gamsDebug >= 2 )
-         printf("DEBUG: equorder %d f = %g\n", gmoGetEquOrderOne(cur_gmo, i+1), f[i]);
+#if gamsDebug >= 2
+      printf("  equorder %d f = %g\n", gmoGetEquOrderOne(cur_gmo, i+1), f[i]);
+#endif
    }
 
    if( gmoGetObjOrder(cur_gmo) != gmoorder_L )
@@ -436,8 +445,9 @@ void funnlbc_(
    else
       f[*nfnc-1] = 0.0;
 
-   if( gamsDebug >= 2 )
-      printf("DEBUG: objorder %d f = %g\n", gmoGetObjOrder(cur_gmo), f[*nfnc-1]);
+#if gamsDebug >= 2
+   printf("  objorder %d f = %g\n", gmoGetObjOrder(cur_gmo), f[*nfnc-1]);
+#endif
 }
 
 void funqbc_(
@@ -450,8 +460,9 @@ void funqbc_(
    int* ir
    )
 {
-   if( gamsDebug >= 1 )
-      printf("CALL funqbc_\n");
+#if gamsDebug >= 1
+   printf("CALL funqbc_\n");
+#endif
 
    /* TODO */
 
@@ -476,8 +487,9 @@ void gradnlbc_(
    double gx;
    double* grad;
 
-   if( gamsDebug >= 1 )
-      printf("CALL gradnlbc_\n");
+#if gamsDebug >= 1
+   printf("CALL gradnlbc_\n");
+#endif
 
    assert(*nvar == gmoN(cur_gmo));
 
@@ -554,12 +566,15 @@ void gradnlbc_(
       }
    }
 
-   if( gamsDebug >= 2 )
-      if( *ir == 0 )
-         for( i = 0; i < *ne; ++i )
-            printf("DEBUG ifun %d jvar %d a %g\n", ifun[i], jvar[i], a[i]);
-      else
-         printf("*nemax = %d too small, require %d\n", nemaxSaved, *ne);
+#if gamsDebug >= 2
+   if( *ir == 0 )
+      for( i = 0; i < *ne; ++i )
+         printf("  ifun %d jvar %d a %g\n", ifun[i], jvar[i], a[i]);
+#endif
+#if gamsDebug >= 1
+   if( *ir == 10 )
+      printf("  *nemax = %d too small, require %d\n", nemaxSaved, *ne);
+#endif
 
    delete[] grad;
 }
@@ -579,8 +594,9 @@ void hessnlbc_(
 {
    int numerr;
 
-   if( gamsDebug >= 1 )
-      printf("CALL hessnlbc_\n");
+#if gamsDebug >= 1
+   printf("CALL hessnlbc_\n");
+#endif
 
    assert(*nvar == gmoN(cur_gmo));
    assert(*nfnc == gmoM(cur_gmo) + 1);
@@ -596,6 +612,11 @@ void hessnlbc_(
    gmoHessLagValue(cur_gmo, x, y, h, 1.0, 1.0, &numerr);
    /* TODO numerr */
 
+#if gamsDebug >= 2
+   for( int i = 0; i < *ne; ++i )
+      printf("  j1var %d j2var %d h %g\n", j1var[i], j2var[i], h[i]);
+#endif
+
    *ir = 0;
 }
 
@@ -605,8 +626,9 @@ void initvrbc_(
    int*    ir
    )
 {
-   if( gamsDebug >= 1 )
-      printf("CALL initvrbc_\n");
+#if gamsDebug >= 1
+   printf("CALL initvrbc_\n");
+#endif
 
    assert(*nvar == gmoN(cur_gmo));
 
@@ -623,8 +645,9 @@ void typevrbc_(
 {
    int i;
 
-   if( gamsDebug >= 1 )
-      printf("CALL typevrbc_\n");
+#if gamsDebug >= 1
+   printf("CALL typevrbc_\n");
+#endif
 
    assert(*nvar == gmoN(cur_gmo));
 
@@ -641,9 +664,15 @@ void typevrbc_(
          case gmovar_I :
             ivtyp[i] = 1;
             break;
+         default:
+            gevLogStat(cur_gev, "Unsupported variable type.");
+            // how to signal an error here?
+            ivtyp[i] = 0;
+            break;
       }
-      if( gamsDebug >= 2 )
-         printf("DEBUG: ivtype = %d\n", ivtyp[i]);
+#if gamsDebug >= 2
+      printf("  ivtype = %d\n", ivtyp[i]);
+#endif
    }
 }
 
@@ -652,8 +681,9 @@ void typevr_C(
    int* ivtyp
    )
 {
-   if( gamsDebug >= 10 )
-      printf("CALL typevr_C\n");
+#if gamsDebug >= 1
+   printf("CALL typevr_C\n");
+#endif
 
    typevrbc_(nvar, ivtyp);
 }
