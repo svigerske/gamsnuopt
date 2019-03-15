@@ -78,6 +78,15 @@ int solveMINLP(
    {
       // TOOD if option "quadra" set, then do adjMethod(0) (line-search) instead
       adjMethod(1); // trust-region
+
+      int do2dir = 0;
+      int dohess = 1;
+      gmoHessLoad(gmo, 0, &do2dir, &dohess);
+      if( !dohess )
+      {
+         gevLogStat(gev, "Failed to initialize Hessian structure!");
+         return 1;
+      }
    }
    else if( gmoNDisc(gmo) > 0 )
       adjMethod(3);
@@ -469,6 +478,9 @@ void gradnlbc_(
 
    assert(*nvar == gmoN(cur_gmo));
 
+   // OMG! ne と nemax に同じアドレスが亘る場合がある -> ne and nemax may have the same address
+   int nemaxSaved = *nemax;
+
    /* we switch to *ir == 10 if *nemax is too small
     * if that happens, we continue to update *ne only
     */
@@ -488,7 +500,7 @@ void gradnlbc_(
 
       gmoGetRowStat(cur_gmo, i+1, &rownz, &j, &j);
 
-      if( *ir == 10 || *ne + rownz > *nemax )
+      if( *ir == 10 || *ne + rownz > nemaxSaved )
       {
          *ir = 10;
          *ne += rownz;
@@ -518,7 +530,7 @@ void gradnlbc_(
 
    if( gmoGetObjOrder(cur_gmo) != gmoorder_L )
    {
-      if( *ir == 10 || *ne + gmoObjNZ(cur_gmo) > *nemax )
+      if( *ir == 10 || *ne + gmoObjNZ(cur_gmo) > nemaxSaved )
       {
          *ir = 10;
          *ne += gmoObjNZ(cur_gmo);
@@ -539,9 +551,12 @@ void gradnlbc_(
       }
    }
 
-   if( gamsDebug >= 2 && *ir == 0 )
-      for( i = 0; i < *ne; ++i )
-         printf("DEBUG ifun %d jvar %d a %g\n", ifun[i], jvar[i], a[i]);
+   if( gamsDebug >= 2 )
+      if( *ir == 0 )
+         for( i = 0; i < *ne; ++i )
+            printf("DEBUG ifun %d jvar %d a %g\n", ifun[i], jvar[i], a[i]);
+      else
+         printf("*nemax = %d too small, require %d\n", nemaxSaved, *ne);
 
    delete[] grad;
 }
@@ -559,11 +574,24 @@ void hessnlbc_(
    int*    ir
    )
 {
+   int numerr;
+
    if( gamsDebug >= 1 )
       printf("CALL hessnlbc_\n");
 
-   /* TODO nonlinear */
-   *ne = 0;
+   assert(*nvar == gmoN(cur_gmo));
+   assert(*nfnc == gmoM(cur_gmo) + 1);
+
+   *ne = gmoHessLagNz(cur_gmo);
+   if( *ne > *nemax )
+   {
+      *ir = 10;
+      return;
+   }
+
+   gmoHessLagStruct(cur_gmo, j1var, j2var);
+   gmoHessLagValue(cur_gmo, x, y, h, 1.0, 1.0, &numerr);
+   /* TODO numerr */
 
    *ir = 0;
 }
