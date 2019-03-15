@@ -19,7 +19,7 @@ extern char currentSolverDPM[1024];
 #include "nuopt_integer.h"
 using::nuopt::integer;
 integer pscctf_(size_t len, const char* str);
-//integer pscftc_(integer* len, char* fchar);
+extern "C" integer pscftc_(integer* len, char* fchar);
 
 gmoHandle_t cur_gmo = NULL;
 gevHandle_t cur_gev = NULL;
@@ -241,9 +241,12 @@ void deffunbc_(
    if( gamsDebug >= 1 )
       printf("CALL deffunbc_\n");
 
-   //???
-   //integer len = 40;
-   //pscftc_(&len, pbnam);
+   integer len = 40;
+   memset(pbnam, ' ', len);
+   gmoNameModel(cur_gmo, equname);
+   memcpy(pbnam, equname, std::min((size_t)len, strlen(equname)));
+
+   pscftc_(&len, pbnam); // why do I call this?
 
    *nfnc = gmoM(cur_gmo) + 1;
    if( *nfnc > *nfmax )
