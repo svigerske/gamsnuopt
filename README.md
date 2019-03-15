@@ -21,5 +21,6 @@ You need a GAMS system and NuOpt libraries including their AMPL interface source
        gmsgenux.out
        /path/to/libgamsnuopt.so nuo 1 1
 
-Reference:
+References:
 - [NuOpt Connection Manual](https://translate.google.com/translate?hl=en&sl=ja&u=http://www.msi.co.jp/nuopt/docs/v20/connection/&prev=search)
+- [GAMS GMO API](https://www.gams.com/latest/docs/apis/expert-level/gmoqdrep.html)
