@@ -29,6 +29,7 @@ Use GAMS option `optfile=1` to read `nuopt.opt`, which is expected to be
 in [NuOpt parameter file format](https://translate.googleusercontent.com/translate_c?depth=1&hl=en&prev=search&rurl=translate.google.com&sl=ja&sp=nmt4&u=http://www.msi.co.jp/nuopt/docs/v20/manual/html/15-01-00.html&xid=17259,15700023,15700186,15700191,15700248,15700253&usg=ALkJrhhguuoumGmmZv9YKM83WaWj1YKcxg), e.g.,
 ```
 begin
+* change method
 method: trust
 scaling: on
 end
