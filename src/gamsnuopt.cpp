@@ -793,6 +793,7 @@ DllExport int STDCALL C__nuoCallSolver(void* Cptr)
    catch( const std::exception& e )
    {
       gevLogStat(cur_gev, e.what());
+      return 1;
    }
 
 #if nuoptDebug > 0
@@ -817,6 +818,208 @@ DllExport int STDCALL C__nuoCallSolver(void* Cptr)
 #endif
    }
 #endif
+
+   // https://translate.googleusercontent.com/translate_c?depth=1&hl=en&prev=search&rurl=translate.google.com&sl=ja&sp=nmt4&u=http://www.msi.co.jp/nuopt/docs/v20/manual/html/0A-02-01.html&xid=17259,15700023,15700186,15700191,15700248,15700253&usg=ALkJrhjy7-fngwOOYutfKNgGqtO6PURY9w
+   int havesol = 0;
+   switch( r->errorFlag() )
+   {
+      case 0:
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Normal);
+         if( gmoNDisc(cur_gmo) > 0 )
+            gmoModelStatSet(cur_gmo, gmoModelStat_OptimalGlobal);
+         else
+            gmoModelStatSet(cur_gmo, gmoModelStat_OptimalLocal);
+         havesol = 1;
+         break;
+      }
+
+      case 2 : // infeasible (linear constraints and variable bounds)
+      case 5 : // infeasible (inefficient (integer) variable bounds)
+      case 16: // infeasible MIP (relaxation solution is provided)
+      case 49: // Variable fixed to infeasible value
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Normal);
+         gmoModelStatSet(cur_gmo, gmoModelStat_InfeasibleNoSolution);
+         break;
+      }
+
+      case 6: // unbounded (linear constraints and variable bounds)
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Normal);
+         gmoModelStatSet(cur_gmo, gmoModelStat_UnboundedNoSolution);
+         break;
+      }
+
+      case 10: // IPM iteration limit exceeded
+      case 40: // SQP iteration limit exceeded
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Iteration);
+         gmoModelStatSet(cur_gmo, gmoModelStat_InfeasibleIntermed);
+         havesol = 1;
+         break;
+      }
+
+      case 11: // infeasible with solution
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Normal);
+         gmoModelStatSet(cur_gmo, gmoModelStat_InfeasibleLocal);
+         havesol = 1;
+         break;
+      }
+
+      case 13: // unbounded with solution
+      case 29: // iteration diverged with solution
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Normal);
+         gmoModelStatSet(cur_gmo, gmoModelStat_Unbounded);
+         havesol = 1;
+         break;
+      }
+
+      case 17: // B & B node limit reached (with feas.sol.)
+      case 37: // B & B terminated with given # of feas.sol. (solution limit)
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_User);
+         gmoModelStatSet(cur_gmo, gmoModelStat_Feasible);
+         havesol = 1;
+         break;
+      }
+
+      case 18: // MIP iteration failed (with feas.sol.)
+      case 83: // Feas.sol found (numerical error in B & B)
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Solver);
+         gmoModelStatSet(cur_gmo, gmoModelStat_Feasible);
+         havesol = 1;
+         break;
+      }
+
+      case 19: // B & B node limit reached (no feas.sol.)
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Iteration);
+         gmoModelStatSet(cur_gmo, gmoModelStat_NoSolutionReturned);
+         break;
+      }
+
+      case 20: // MIP iter. Failed (no feas.sol.)
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Solver);
+         gmoModelStatSet(cur_gmo, gmoModelStat_NoSolutionReturned);
+         break;
+      }
+
+      case 21: // B & B itr. Timeout (with feas.sol.)
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Resource);
+         gmoModelStatSet(cur_gmo, gmoModelStat_Feasible);
+         havesol = 1;
+         break;
+      }
+
+      case 22: // B & B itr. Timeout (no feas.sol.)
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Resource);
+         gmoModelStatSet(cur_gmo, gmoModelStat_NoSolutionReturned);
+         break;
+      }
+
+      case 27: // SIMPLEX iteration limit exceeded
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Iteration);
+         gmoModelStatSet(cur_gmo, gmoModelStat_InfeasibleIntermed);
+         havesol = 1;
+         break;
+      }
+
+      case 30: // terminated by user with solution
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_User);
+         gmoModelStatSet(cur_gmo, gmoModelStat_InfeasibleIntermed);
+         havesol = 1;
+         break;
+      }
+
+      case 31: // B & B terminated by user (with feas.sol.)
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_User);
+         gmoModelStatSet(cur_gmo, gmoModelStat_Feasible);
+         havesol = 1;
+         break;
+      }
+
+      case 32: // B & B terminated by user (no feas.sol.)
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_User);
+         gmoModelStatSet(cur_gmo, gmoModelStat_NoSolutionReturned);
+         break;
+      }
+
+      case 33: // Bound violated
+      case 34: // Bound and Constraint violated
+      case 35: // Constraint violated
+      case 36: // Equality constraint violated
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Solver);
+         gmoModelStatSet(cur_gmo, gmoModelStat_InfeasibleIntermed);
+         havesol = 1;
+         break;
+      }
+
+      case 38: // dual infeasible with solution
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Normal);
+         gmoModelStatSet(cur_gmo, gmoModelStat_Unbounded);
+         havesol = 1;
+         break;
+      }
+
+      case 39: // IPM iteration timeout
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Resource);
+         gmoModelStatSet(cur_gmo, gmoModelStat_InfeasibleIntermed);
+         havesol = 1;
+         break;
+      }
+
+      case 45: // B & B gap reaches under the limit
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_Normal);
+         gmoModelStatSet(cur_gmo, gmoModelStat_Feasible);
+         havesol = 1;
+         break;
+      }
+
+      case 100: // Can not open NUOPT License file
+      case 101: // Invalid License file
+      case 102: // Machine key (YY) not consistent to License file
+      case 103: // License expired on XX days ago
+      case 104: // Invalid License limit
+      case 105: // Can not get license information check machine configuration
+      {
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_License);
+         gmoModelStatSet(cur_gmo, gmoModelStat_LicenseError);
+         break;
+      }
+
+      default:
+      {
+         gevLogStat(cur_gev, r->errorMessage());
+         gmoSolveStatSet(cur_gmo, gmoSolveStat_InternalErr);
+         gmoModelStatSet(cur_gmo, gmoModelStat_ErrorNoSolution);
+         break;
+      }
+   }
+
+   if( havesol )
+   {
+      // TODO duals, basis, etc
+      gmoSetSolutionPrimal(cur_gmo, r->getX());
+      gmoCompleteSolution(cur_gmo);
+   }
+
+   gmoSetHeadnTail(cur_gmo, gmoHresused, r->optTime());
+   // TODO: return more like itercount, nodecount, dualbound
 
    delete r;
 
