@@ -1,0 +1,13 @@
+# Eclipse
+.cproject
+.externalToolBuilders/
+.project
+.settings/
+
+# third-party libs
+gams
+nuopt
+
+# build artefacts
+libgamsnuopt.so
+obj
