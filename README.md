@@ -16,11 +16,18 @@ You need a GAMS system and NuOpt libraries including their AMPL interface source
 5. Edit `gmscmpun.txt` in the GAMS system directory to make the solver link
    known to GAMS. Add the following section:
 
-       NUOPT 11 5 0001020304 1 0 2 LP RMIP MIP QCP MIQCP RMIQCP NLP DNLP RMINLP MINLP
+       NUOPT 11 5 0001020304 1 0 2 LP RMIP MIP QCP RMIQCP NLP DNLP RMINLP
        gmsgenus.run
        gmsgenux.out
        /path/to/libgamsnuopt.so nuo 1 1
 
-References:
+## TODO
+
+- implement quadratics
+- redirect NuOpt output
+- pass on GAMS options
+
+## References
+
 - [NuOpt Connection Manual](https://translate.google.com/translate?hl=en&sl=ja&u=http://www.msi.co.jp/nuopt/docs/v20/connection/&prev=search)
 - [GAMS GMO API](https://www.gams.com/latest/docs/apis/expert-level/gmoqdrep.html)
