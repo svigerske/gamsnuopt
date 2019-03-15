@@ -738,8 +738,16 @@ DllExport int STDCALL C__nuoCallSolver(void* Cptr)
    probType = gmoSense(cur_gmo) == gmoObj_Max ? 1 : 0;
 
    nuoptParam p;
-   //p.read("nuopt.prm");
    p.iisDetect = "off";
+
+   if( gmoOptFile(cur_gmo) )
+   {
+      char optfilename[GMS_SSSIZE];
+      gmoNameOptFile(cur_gmo, optfilename);
+      printf("Read optfile %s\n", optfilename);
+      p.read(optfilename);
+      p.outputMode = "normal";
+   }
 #if nuoptDebug > 1
    p.outputMode = "debug";
 #endif
@@ -777,7 +785,7 @@ DllExport int STDCALL C__nuoCallSolver(void* Cptr)
    {
       r = nuoptKernel();
    }
-   catch( const NuoptException& e )
+   catch( const std::exception& e )
    {
       gevLogStat(cur_gev, e.what());
    }
@@ -799,7 +807,7 @@ DllExport int STDCALL C__nuoCallSolver(void* Cptr)
       printf("Objective: %g\n", r->optValue());
       int i;
 #if gamsDebug > 1
-      for( i = 0; i < gmoN(gmo); ++i )
+      for( i = 0; i < gmoN(cur_gmo); ++i )
          printf("X[%d] = %g\n", i, r->getX()[i]);
 #endif
    }
