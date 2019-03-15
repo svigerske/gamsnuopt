@@ -34,8 +34,6 @@ DUMMY_OBJECTS = \
 
 OBJS = $(addprefix obj/, gamsnuopt.o callbackwrap.o gmomcc.o gevmcc.o $(DUMMY_OBJECTS))
 
-all : libgamsnuopt.so
-
 libgamsnuopt.so : $(OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
