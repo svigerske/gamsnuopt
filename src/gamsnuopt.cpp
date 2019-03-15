@@ -7,9 +7,27 @@
 /* GAMS API */
 #include "gmomcc.h"
 #include "gevmcc.h"
+#include "optcc.h"
+
+#if defined(_WIN32)
+#if !defined(STDCALL)
+#define STDCALL __stdcall
+#endif
+#if !defined(DllExport)
+#define DllExport __declspec(dllexport)
+#endif
+#else
+#if !defined(STDCALL)
+#define STDCALL
+#endif
+#if !defined(DllExport)
+#define DllExport
+#endif
+#endif
 
 /* NuOpt API */
 #include "nuoIf.h"
+#include "nuopt_exception.h"
 #include "argUtils.h"
 
 #include "DPManager.h"
@@ -18,12 +36,6 @@ extern char currentSolverDPM[1024];
 
 #include "nuopt_integer.h"
 using::nuopt::integer;
-
-#define gamsDebug 0
-#define nuoptDebug 0
-
-gmoHandle_t cur_gmo = NULL;
-gevHandle_t cur_gev = NULL;
 
 //int SimpleMessageOutput(int){return 0;}
 void  wcspinfo(int,int,double,double,double,double,int){}
@@ -40,92 +52,12 @@ int rangeAnalysisProbe = -1;
 integer pscctf_(size_t len, const char* str);
 extern "C" integer pscftc_(integer* len, char* fchar);
 
-int solveMINLP(
-   gmoHandle_t gmo,
-   gevHandle_t gev
-)
-{
-   int nfnc, nvar, probType;
 
-   strcpy(currentDPM, "basic_dpm");
-   strcpy(currentSolverDPM, "solver_dpm");
+#define gamsDebug 0
+#define nuoptDebug 0
 
-   DPMMAP_CREATE(currentDPM);
-
-   nuoptDispVersion();
-   //nuoptOst(stdout,"             (GAMS module)\n");
-
-   nfnc = gmoM(gmo) + 1;
-   nvar = gmoN(gmo);
-   probType = gmoSense(gmo) == gmoObj_Max ? 1 : 0;
-
-   nuoptParam p;
-   //p.read("nuopt.prm");
-   p.iisDetect = "off";
-#if nuoptDebug > 1
-   p.outputMode = "debug";
-#endif
-
-   int retVal = setCommon(&p, &nvar, &nfnc, &probType);
-   if( !retVal )
-     return 1;
-
-   if( gmoNLNZ(gmo) > 0 || gmoObjNLNZ(gmo) > 0 )  /* nonlinear */
-   {
-      // TODO if option "quadra" set, then do adjMethod(0) (line-search) instead
-      adjMethod(1); // trust-region
-
-      int do2dir = 0;
-      int dohess = 1;
-      gmoHessLoad(gmo, 0, &do2dir, &dohess);
-      if( !dohess )
-      {
-         gevLogStat(gev, "Failed to initialize Hessian structure!");
-         return 1;
-      }
-   }
-   else if( gmoNDisc(gmo) > 0 )
-      adjMethod(3);
-   else
-      adjMethod(4);
-
-#if nuoptDebug > 0
-   nuoptOpen22("gamsnuoptlog");
-   pscctf_(strlen("gamsnuoptlog"),"gamsnuoptlog");
-#endif
-
-   cur_gmo = gmo;
-   cur_gev = gev;
-
-   nuoptResult* r = nuoptKernel();
-
-#if nuoptDebug > 0
-   nuoptClose22();
-
-   nuoptOutput(r, "nuopt.out");
-#endif
-
-#if gamsDebug > 0
-   if( r->errorMessage()[0] == '\0' )
-      printf("Optimal\n");
-   else
-      printf("Non-Optimal: %s\n", r->errorMessage());
-
-   if( r->errorFlag() != 5 )
-   {
-      printf("Objective: %g\n", r->optValue());
-      int i;
-#if gamsDebug > 1
-      for( i = 0; i < gmoN(gmo); ++i )
-         printf("X[%d] = %g\n", i, r->getX()[i]);
-#endif
-   }
-#endif
-
-   delete r;
-
-   return 0;
-}
+gmoHandle_t cur_gmo = NULL;
+gevHandle_t cur_gev = NULL;
 
 extern "C"
 {
@@ -502,7 +434,7 @@ void gradnlbc_(
    *ir = 0;
    *ne = 0;
 
-   /* if everything linear, then just stop */
+   /* if everything linear, then just return */
    if( gmoObjNLNZ(cur_gmo) == 0 && gmoNLNZ(cur_gmo) == 0 )
       return;
 
@@ -601,6 +533,13 @@ void hessnlbc_(
    assert(*nvar == gmoN(cur_gmo));
    assert(*nfnc == gmoM(cur_gmo) + 1);
 
+   /* if everything linear, then just return */
+   if( gmoObjNLNZ(cur_gmo) == 0 && gmoNLNZ(cur_gmo) == 0 )
+   {
+      *ne = 0;
+      return;
+   }
+
    *ne = gmoHessLagNz(cur_gmo);
    if( *ne > *nemax )
    {
@@ -686,6 +625,200 @@ void typevr_C(
 #endif
 
    typevrbc_(nvar, ivtyp);
+}
+
+
+DllExport void STDCALL nuoXCreate(void** Cptr)
+{
+   assert(Cptr != NULL);
+
+   // GAMS needs a non-Null pointer as return
+   *Cptr = (void*)0x1;
+}
+
+DllExport int STDCALL nuocreate(void** Cptr, char* msgBuf, int msgBufLen)
+{
+   assert(Cptr != NULL);
+   assert(msgBufLen > 0);
+   assert(msgBuf != NULL);
+
+   // GAMS needs a non-Null pointer as return
+   *Cptr = (void*)0x1;
+
+   msgBuf[0] = 0;
+
+   return 1;
+}
+
+DllExport void STDCALL nuoXFree(void** Cptr)
+{
+   assert(Cptr != NULL);
+   assert(*Cptr == (void*)0x1);
+
+   cur_gmo = NULL;
+   cur_gev = NULL;
+
+   gmoLibraryUnload();
+   gevLibraryUnload();
+}
+
+DllExport int STDCALL nuofree(void** Cptr)
+{
+   nuoXFree(Cptr);
+
+   return 1;
+}
+
+/* comp returns the compatibility mode:
+           0: client is too old for the DLL, no compatibility
+           1: client version and DLL version are the same, full compatibility
+           2: client is older than DLL, but defined as compatible, backward compatibility
+           3: client is newer than DLL, forward compatibility
+           FIXME: for now, we just claim full compatibility
+ */
+DllExport int STDCALL C__nuoXAPIVersion(int api, char* Msg, int* comp)
+{
+   *comp = 1;
+   return 1;
+}
+
+DllExport int STDCALL D__nuoXAPIVersion(int api, char* Msg, int* comp)
+{
+   *comp = 1;
+   return 1;
+}
+
+DllExport int STDCALL C__nuoXCheck(const char* funcn, int ClNrArg, int Clsign[], char* Msg) { return 1; }
+
+DllExport int STDCALL D__nuoXCheck(const char* funcn, int ClNrArg, int Clsign[], char* Msg) { return 1; }
+
+DllExport int STDCALL C__nuoReadyAPI(void* Cptr, gmoHandle_t Gptr, optHandle_t Optr)
+{
+   assert(Cptr == (void*)0x1);
+   assert(Gptr != NULL);
+   assert(Optr == NULL);
+
+   char msg[256];
+   if( !gmoGetReady(msg, sizeof(msg)) )
+      return 1;
+   if( !gevGetReady(msg, sizeof(msg)) )
+      return 1;
+
+   cur_gmo = Gptr;
+   cur_gev = (gevHandle_t)gmoEnvironment(cur_gmo);
+
+   strcpy(currentDPM, "basic_dpm");
+   strcpy(currentSolverDPM, "solver_dpm");
+
+   DPMMAP_CREATE(currentDPM);
+
+   nuoptDispVersion();
+   //nuoptOst(stdout,"             (GAMS module)\n");
+
+   return 0;
+}
+
+DllExport int STDCALL C__nuoCallSolver(void* Cptr)
+{
+   assert(Cptr == (void*)0x1);
+   assert(cur_gmo != NULL);
+   assert(cur_gev != NULL);
+
+   int nfnc, nvar, probType;
+
+   /* reformulate objective variable out of model, if possible */
+   gmoObjStyleSet(cur_gmo, gmoObjType_Fun);
+   gmoObjReformSet(cur_gmo, 1);
+
+   /* NuOpt uses 1-based indexing */
+   gmoIndexBaseSet(cur_gmo, 1);
+
+   nfnc = gmoM(cur_gmo) + 1;
+   nvar = gmoN(cur_gmo);
+   probType = gmoSense(cur_gmo) == gmoObj_Max ? 1 : 0;
+
+   nuoptParam p;
+   //p.read("nuopt.prm");
+   p.iisDetect = "off";
+#if nuoptDebug > 1
+   p.outputMode = "debug";
+#endif
+
+   int retVal = setCommon(&p, &nvar, &nfnc, &probType);
+   if( !retVal )
+     return 1;
+
+   if( gmoNLNZ(cur_gmo) > 0 || gmoObjNLNZ(cur_gmo) > 0 )  /* nonlinear */
+   {
+      // TODO if option "quadra" set, then do adjMethod(0) (line-search) instead
+      adjMethod(1); // trust-region
+
+      int do2dir = 0;
+      int dohess = 1;
+      gmoHessLoad(cur_gmo, 0, &do2dir, &dohess);
+      if( !dohess )
+      {
+         gevLogStat(cur_gev, "Failed to initialize Hessian structure!");
+         return 1;
+      }
+   }
+   else if( gmoNDisc(cur_gmo) > 0 )
+      adjMethod(3);
+   else
+      adjMethod(4);
+
+#if nuoptDebug > 0
+   nuoptOpen22("gamsnuoptlog");
+   pscctf_(strlen("gamsnuoptlog"),"gamsnuoptlog");
+#endif
+
+   nuoptResult* r = NULL;
+   try
+   {
+      r = nuoptKernel();
+   }
+   catch( const NuoptException& e )
+   {
+      gevLogStat(cur_gev, e.what());
+   }
+
+#if nuoptDebug > 0
+   nuoptClose22();
+
+   nuoptOutput(r, "nuopt.out");
+#endif
+
+#if gamsDebug > 0
+   if( r->errorMessage()[0] == '\0' )
+      printf("Optimal\n");
+   else
+      printf("Non-Optimal: %s\n", r->errorMessage());
+
+   if( r->errorFlag() != 5 )
+   {
+      printf("Objective: %g\n", r->optValue());
+      int i;
+#if gamsDebug > 1
+      for( i = 0; i < gmoN(gmo); ++i )
+         printf("X[%d] = %g\n", i, r->getX()[i]);
+#endif
+   }
+#endif
+
+   delete r;
+
+   return 0;
+}
+
+DllExport int STDCALL C__nuoHaveModifyProblem(void* Cptr)
+{
+   return 0;
+}
+
+DllExport int STDCALL C__nuoModifyProblem(void* Cptr)
+{
+   assert(Cptr == (void*)0x1);
+   return 1;
 }
 
 }

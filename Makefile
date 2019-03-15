@@ -1,4 +1,4 @@
-all : gamsnuopt
+all : libgamsnuopt.so
 
 DUMMY_OBJECTS = \
   myAD.o \
@@ -18,7 +18,7 @@ DUMMY_OBJECTS = \
   mysimpleenv.o \
   mymtxfree.o
 
-gamsnuopt : src/main.o src/minlp.o src/minlp_f.o src/loadgms.o gmomcc.o gevmcc.o optcc.o $(DUMMY_OBJECTS)
+libgamsnuopt.so : src/gamsnuopt.o src/callbackwrap.o gmomcc.o gevmcc.o $(DUMMY_OBJECTS)
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 clean:
@@ -35,11 +35,12 @@ FC=gfortran
 
 IFLAGS = -Igams/apifiles/C/api -Inuopt/libnuopt -Inuopt/arch -Inuopt/ampl -Inuopt/dp -Inuopt/libsimple
 #WFLAGS = -Wall -Wextra -Wno-unused-parameter
-CFLAGS = $(IFLAGS) $(WFLAGS) -g -std=c99 -DGAMSDIR=\"gams\" -fPIC
+CFLAGS = $(IFLAGS) $(WFLAGS) -g -std=c99 -fPIC
 CXXFLAGS = $(IFLAGS) $(WFLAGS) -g -std=c++11 -fPIC
 FFLAGS = -fPIC
 
-LDFLAGS = -ldl -Wl,-rpath,\$$ORIGIN -Wl,-rpath,$(realpath gams)
+LDFLAGS = -shared
+LDFLAGS += -ldl -Wl,-rpath,\$$ORIGIN
 #LDFLAGS += -Lnuopt/userapp/lib -lnuopt_unix
 #LDFLAGS += -Lnuopt/libnuopt -lnuopt_nolapack -llapack -lblas
 LDFLAGS += -Lnuopt/libnuopt -lnuopt
