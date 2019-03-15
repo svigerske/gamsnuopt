@@ -415,6 +415,7 @@ void gradnlbc_(
    int i, j;
    int rownz;
    int numerr;
+   int evalerror = 0;
    double f;
    double gx;
    double* grad;
@@ -455,7 +456,8 @@ void gradnlbc_(
       }
 
       gmoEvalGrad(cur_gmo, i+1, x, &f, grad, &gx, &numerr);
-      /* TODO numerr */
+      if( numerr )
+         evalerror = 1;
 
       void* jacptr = NULL;
       double jacval;
@@ -485,7 +487,8 @@ void gradnlbc_(
       else
       {
          gmoEvalGradObj(cur_gmo, x, &f, grad, &gx, &numerr);
-         /* TODO numerr */
+         if( numerr )
+            evalerror = 1;
 
          gmoGetObjSparse(cur_gmo, jvar + *ne, a + *ne, NULL, &rownz, &i);
          assert(rownz == gmoObjNZ(cur_gmo));
@@ -498,6 +501,8 @@ void gradnlbc_(
       }
    }
 
+   delete[] grad;
+
 #if gamsDebug >= 2
    if( *ir == 0 )
       for( i = 0; i < *ne; ++i )
@@ -508,7 +513,8 @@ void gradnlbc_(
       printf("  *nemax = %d too small, require %d\n", nemaxSaved, *ne);
 #endif
 
-   delete[] grad;
+   if( evalerror )
+      *ir = 10;
 }
 
 void hessnlbc_(
@@ -549,14 +555,13 @@ void hessnlbc_(
 
    gmoHessLagStruct(cur_gmo, j1var, j2var);
    gmoHessLagValue(cur_gmo, x, y, h, 1.0, 1.0, &numerr);
-   /* TODO numerr */
 
 #if gamsDebug >= 2
    for( int i = 0; i < *ne; ++i )
       printf("  j1var %d j2var %d h %g\n", j1var[i], j2var[i], h[i]);
 #endif
 
-   *ir = 0;
+   *ir = numerr ? 10 : 0;
 }
 
 void initvrbc_(
