@@ -1,4 +1,18 @@
-all : libgamsnuopt.so
+FC=gfortran
+
+IFLAGS = -Igams/apifiles/C/api -Inuopt/libnuopt -Inuopt/arch -Inuopt/ampl -Inuopt/dp -Inuopt/libsimple
+WFLAGS = -Wall -Wextra -Wno-unused-parameter -Wno-ignored-qualifiers
+CFLAGS = $(IFLAGS) -g -std=c99 -fPIC
+CXXFLAGS = $(IFLAGS) -g -std=c++11 -fPIC
+FFLAGS = -fPIC
+
+LDFLAGS = -shared
+LDFLAGS += -ldl -Wl,-rpath,\$$ORIGIN
+#LDFLAGS += -Lnuopt/userapp/lib -lnuopt_unix
+#LDFLAGS += -Lnuopt/libnuopt -lnuopt_nolapack -llapack -lblas
+LDFLAGS += -Lnuopt/libnuopt -lnuopt
+LDFLAGS += -Lnuopt/f2c -lI77 -lF77
+LDFLAGS += -Lnuopt/dp -ldp
 
 DUMMY_OBJECTS = \
   myAD.o \
@@ -18,31 +32,28 @@ DUMMY_OBJECTS = \
   mysimpleenv.o \
   mymtxfree.o
 
-libgamsnuopt.so : src/gamsnuopt.o src/callbackwrap.o gmomcc.o gevmcc.o $(DUMMY_OBJECTS)
+OBJS = $(addprefix obj/, gamsnuopt.o callbackwrap.o gmomcc.o gevmcc.o $(DUMMY_OBJECTS))
+
+all : libgamsnuopt.so
+
+libgamsnuopt.so : $(OBJS)
 	$(CXX) -o $@ $^ $(LDFLAGS)
 
 clean:
-	rm -f *.o src/*.o gamsnuopt
+	rm -rf obj
+	rm -f libgamsnuopt.so
 
-%.c : gams/apifiles/C/api/%.c
-	cp $< $@
+obj :
+	mkdir -p obj
 
-%.cc : nuopt/ampl/%.cc
-	cp $< $@
+obj/%.o : src/%.cpp | obj
+	$(CXX) -o $@ -c $^ $(CXXFLAGS) $(WFLAGS)
 
+obj/%.o : src/%.f | obj
+	$(FC) -o $@ -c $^ $(FFLAGS)
 
-FC=gfortran
+obj/%.o : gams/apifiles/C/api/%.c | obj
+	$(CC) -o $@ -c $^ $(CFLAGS)
 
-IFLAGS = -Igams/apifiles/C/api -Inuopt/libnuopt -Inuopt/arch -Inuopt/ampl -Inuopt/dp -Inuopt/libsimple
-#WFLAGS = -Wall -Wextra -Wno-unused-parameter
-CFLAGS = $(IFLAGS) $(WFLAGS) -g -std=c99 -fPIC
-CXXFLAGS = $(IFLAGS) $(WFLAGS) -g -std=c++11 -fPIC
-FFLAGS = -fPIC
-
-LDFLAGS = -shared
-LDFLAGS += -ldl -Wl,-rpath,\$$ORIGIN
-#LDFLAGS += -Lnuopt/userapp/lib -lnuopt_unix
-#LDFLAGS += -Lnuopt/libnuopt -lnuopt_nolapack -llapack -lblas
-LDFLAGS += -Lnuopt/libnuopt -lnuopt
-LDFLAGS += -Lnuopt/f2c -lI77 -lF77
-LDFLAGS += -Lnuopt/dp -ldp
+obj/%.o : nuopt/ampl/%.cc | obj
+	$(CXX) -o $@ -c $^ $(CXXFLAGS)
