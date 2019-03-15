@@ -26,8 +26,6 @@ gevHandle_t cur_gev = NULL;
 
 #define gamsDebug 0
 
-// 以下はビルド用ダミー
-//
 //int SimpleMessageOutput(int){return 0;}
 void  wcspinfo(int,int,double,double,double,double,int){}
 //int wcspDebug=0;
@@ -328,39 +326,59 @@ void funlbc_(
    int* ir
    )
 {
+   int rownz;
    int i, j;
 
    if( gamsDebug >= 1 )
       printf("CALL funlbc_\n");
 
-   /* FIXME code below should do gradients only for linear equations only */
+   /* we switch to *ir == 10 if *nemax is too small
+    * if that happens, we continue to update *ne only
+    */
+   *ir = 0;
 
-   int nzjac = gmoNZ(cur_gmo);
-   int nzobj = gmoObjNZ(cur_gmo);
-   *ne = nzjac + nzobj;
-   if( *nemax < *ne )
+   *ne = 0;
+   for( i = 0; i < gmoM(cur_gmo); ++i )
    {
-      *ir = 10;
-      return;
+      if( gmoGetEquOrderOne(cur_gmo, i+1) != gmoorder_L )
+         continue;
+
+      gmoGetRowStat(cur_gmo, i+1, &rownz, &j, &j);
+      if( *ne + rownz > *nemax )
+         *ir = 10;
+
+      if( *ir == 0 )
+      {
+         gmoGetRowSparse(cur_gmo, i+1, jvar + *ne, a + *ne, NULL, &rownz, &j);
+         for( j = 0; j < rownz; ++j )
+            ifun[*ne + j] = i+1;
+      }
+      *ne += rownz;
    }
 
-   int* rowstart = (int*) malloc((gmoM(cur_gmo)+1) * sizeof(int));
-   gmoGetMatrixRow(cur_gmo, rowstart, jvar, a, NULL);
-   for( i = 0; i < gmoM(cur_gmo); ++i )
-      for( j = rowstart[i]; j < rowstart[i+1]; ++j )
-         ifun[j-1] = i+1;
-   assert(nzjac == rowstart[gmoM(cur_gmo)]-1);
-   free(rowstart);
+   if( gmoGetObjOrder(cur_gmo) == gmoorder_L )
+   {
+      if( *ne + gmoObjNZ(cur_gmo) > *nemax )
+         *ir = 10;
 
-   gmoGetObjSparse(cur_gmo, jvar+nzjac, a+nzjac, NULL, &nzobj, &i);
-   for( j = 0; j < nzobj; ++j )
-      ifun[nzjac+j] = gmoM(cur_gmo)+1;
+      if( *ir == 0 )
+      {
+         gmoGetObjSparse(cur_gmo, jvar + *ne, a + *ne, NULL, &rownz, &i);
+         assert(rownz == gmoObjNZ(cur_gmo));
+         for( j = 0; j < rownz; ++j )
+            ifun[*ne + j] = gmoM(cur_gmo) + 1;
+      }
+      *ne += gmoObjNZ(cur_gmo);
+   }
 
    if( gamsDebug >= 2 )
-      for( i = 0; i < *ne; ++i )
-         printf("DEBUG ifun %d jvar %d a %g\n", ifun[i], jvar[i], a[i]);
-
-   *ir = 0;
+   {
+      if( *ir == 0 )
+         for( i = 0; i < *ne; ++i )
+            printf("DEBUG ifun %d jvar %d a %g\n", ifun[i], jvar[i], a[i]);
+      else
+         printf("*nemax = %d too small, requesting %d\n", *nemax, *ne);
+   }
 }
 
 void funnlbc_(
@@ -439,8 +457,8 @@ void gradnlbc_(
    int*    ir
    )
 {
-   int i;
-   int pos;
+   int i, j;
+   int rownz;
    int numerr;
    double f;
    double gx;
@@ -451,28 +469,32 @@ void gradnlbc_(
 
    assert(*nvar == gmoN(cur_gmo));
 
-   /* FIXME code below should do gradients only for nonlinear equations only */
-
-   *ne = 0;
+   /* we switch to *ir == 10 if *nemax is too small
+    * if that happens, we continue to update *ne only
+    */
    *ir = 0;
-   return;
+   *ne = 0;
 
-   int nzjac = gmoNZ(cur_gmo);
-   int nzobj = gmoObjNZ(cur_gmo);
-   *ne = nzjac + nzobj;
-   if( *nemax < *ne )
-   {
-      *ir = 10;
+   /* if everything linear, then just stop */
+   if( gmoObjNLNZ(cur_gmo) == 0 && gmoNLNZ(cur_gmo) == 0 )
       return;
-   }
 
-   // TODO it seems that we could skip over linear constraints/obj here
+   grad = new double[*nvar];
 
-   grad = (double*)malloc(*nvar * sizeof(double));
-
-   pos = 0;
    for( i = 0; i < gmoM(cur_gmo); ++i )
    {
+      if( gmoGetEquOrderOne(cur_gmo, i+1) == gmoorder_L )
+         continue;
+
+      gmoGetRowStat(cur_gmo, i+1, &rownz, &j, &j);
+
+      if( *ir == 10 || *ne + rownz > *nemax )
+      {
+         *ir = 10;
+         *ne += rownz;
+         continue;
+      }
+
       gmoEvalGrad(cur_gmo, i+1, x, &f, grad, &gx, &numerr);
       /* TODO numerr */
 
@@ -485,43 +507,43 @@ void gradnlbc_(
       {
          gmoGetRowJacInfoOne(cur_gmo, i+1, &jacptr, &jacval, &colidx, &nlflag);
 
-         assert(pos < *ne);
-         ifun[pos] = i+1;
-         jvar[pos] = colidx;
-         a[pos] = grad[colidx-1];
+         ifun[*ne] = i+1;
+         jvar[*ne] = colidx;
+         a[*ne] = grad[colidx-1];
 
-         if( gamsDebug >= 2 )
-            printf("pos %d: ifun %d jvar %d a %g\n", pos, ifun[pos], jvar[pos], a[pos]);
-
-         ++pos;
+         ++*ne;
       }
       while( jacptr != NULL );
    }
-   assert(pos == nzjac);
 
-   gmoEvalGradObj(cur_gmo, x, &f, grad, &gx, &numerr);
-   /* TODO numerr */
-
-   int* objcolidx = new int[nzobj];
-   gmoGetObjSparse(cur_gmo, objcolidx, a+pos, NULL, &nzobj, &i);
-   for( i = 0; i < nzobj; ++i )
+   if( gmoGetObjOrder(cur_gmo) != gmoorder_L )
    {
-      assert(pos < *ne);
-      ifun[pos] = gmoM(cur_gmo)+1;
-      jvar[pos] = objcolidx[i];
-      a[pos] = grad[objcolidx[i]-1];
+      if( *ir == 10 || *ne + gmoObjNZ(cur_gmo) > *nemax )
+      {
+         *ir = 10;
+         *ne += gmoObjNZ(cur_gmo);
+      }
+      else
+      {
+         gmoEvalGradObj(cur_gmo, x, &f, grad, &gx, &numerr);
+         /* TODO numerr */
 
-      if( gamsDebug >= 2 )
-         printf("pos %d: ifun %d jvar %d a %g\n", pos, ifun[pos], jvar[pos], a[pos]);
-
-      ++pos;
+         gmoGetObjSparse(cur_gmo, jvar + *ne, a + *ne, NULL, &rownz, &i);
+         assert(rownz == gmoObjNZ(cur_gmo));
+         for( j = 0; j < rownz; ++j )
+         {
+            ifun[*ne + j] = gmoM(cur_gmo) + 1;
+            a[*ne + j] = grad[jvar[*ne + j] - 1];
+         }
+         *ne += rownz;
+      }
    }
-   assert(pos == nzjac+nzobj);
-   delete[] objcolidx;
 
-   free(grad);
+   if( gamsDebug >= 2 && *ir == 0 )
+      for( i = 0; i < *ne; ++i )
+         printf("DEBUG ifun %d jvar %d a %g\n", ifun[i], jvar[i], a[i]);
 
-   *ir = 0;
+   delete[] grad;
 }
 
 void hessnlbc_(
