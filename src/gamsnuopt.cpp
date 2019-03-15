@@ -56,8 +56,8 @@ extern "C" integer pscftc_(integer* len, char* fchar);
 #define gamsDebug 0
 #define nuoptDebug 0
 
-gmoHandle_t cur_gmo = NULL;
-gevHandle_t cur_gev = NULL;
+static gmoHandle_t cur_gmo = NULL;
+static gevHandle_t cur_gev = NULL;
 
 extern "C"
 {
@@ -744,15 +744,11 @@ DllExport int STDCALL C__nuoCallSolver(void* Cptr)
 
    nuoptParam p;
    p.iisDetect = "off";
+   p.outputMode = "normal";
 
    if( gmoOptFile(cur_gmo) )
-   {
-      char optfilename[GMS_SSSIZE];
-      gmoNameOptFile(cur_gmo, optfilename);
-      printf("Read optfile %s\n", optfilename);
-      p.read(optfilename);
-      p.outputMode = "normal";
-   }
+      p.filename = gmoNameOptFile(cur_gmo, (char*) malloc(GMS_SSSIZE));  // FIXME memleak?
+
 #if nuoptDebug > 1
    p.outputMode = "debug";
 #endif
